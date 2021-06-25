@@ -36,15 +36,15 @@ mysql_variables=
 # defines all the MySQL servers
 mysql_servers =
 (
-	{ address="mysql-8.default.svc.cluster.local" , port=3306 , hostgroup=1, max_connections=5000 },
-        { address="mysql-8-slave.default.svc.cluster.local" , port=3306 , hostgroup=1, max_connections=5000 },
+	{ address="mysql-8-primary.default.svc.cluster.local" , port=3306 , hostgroup=1, max_connections=5000 },
+  { address="mysql-8-secondary.default.svc.cluster.local" , port=3306 , hostgroup=1, max_connections=5000 },
 )
 
 
 # defines all the MySQL users
 mysql_users:
 (
-	{ username = "root" , password = "XHCO2ydDXj" , default_hostgroup = 0 , active = 1 }
+	{ username = "root" , password = "DtsoT5hShk" , default_hostgroup = 0 , active = 1 }
 )
 
 
@@ -81,4 +81,3 @@ mysql_replication_hostgroups=
                 comment="RHG1"
        }
 )
-
