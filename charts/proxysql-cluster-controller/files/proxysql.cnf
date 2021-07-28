@@ -1,108 +1,105 @@
+{{- $sslEnabled := or (and .Values.ssl.cert .Values.ssl.key) .Values.ssl.fromSecret -}}
 datadir="/var/lib/proxysql"
 
 admin_variables=
 {
-  admin_credentials="admin:admin;radmin:radmin"
-  mysql_ifaces="0.0.0.0:6032"
-  cluster_username="radmin"
-  cluster_password="radmin"
-  cluster_check_interval_ms=200
-  cluster_check_status_frequency=100
-  cluster_mysql_query_rules_save_to_disk=true
-  cluster_mysql_servers_save_to_disk=true
-  cluster_mysql_users_save_to_disk=true
-  cluster_proxysql_servers_save_to_disk=true
-  cluster_mysql_query_rules_diffs_before_sync=3
-  cluster_mysql_servers_diffs_before_sync=3
-  cluster_mysql_users_diffs_before_sync=3
-  cluster_proxysql_servers_diffs_before_sync=3
+  {{- range $key, $value := .Values.admin_variables }}
+  {{ $key }}={{ $value | toJson }}
+  {{- end }}
 }
 
 mysql_variables=
 {
-  threads=2
-  max_connections=2048
-  default_query_delay=0
-  default_query_timeout=36000000
-  have_compress=true
-  poll_timeout=2000
-  interfaces="0.0.0.0:6033"
-  default_schema="information_schema"
-  stacksize=1048576
-  server_version="8.0.20"
-  connect_timeout_server=3000
-  monitor_username="monitor"
-  monitor_password="monitor"
-  monitor_history=600000
-  monitor_connect_interval=5000
-  monitor_ping_interval=2000
-  monitor_read_only_interval=1500
-  monitor_read_only_timeout=500
-  ping_interval_server_msec=15000
-  ping_timeout_server=500
-  commands_stats=true
-  sessions_sort=true
-  connect_retries_on_failure=10
+  {{- include "proxysql.sslConf" . | indent 2 }}
+  {{- range $key, $value := .Values.mysql_variables }}
+  {{ $key }}={{ $value | toJson }}
+  {{- end }}
 }
 
 # defines all the MySQL servers
 mysql_servers =
 (
-	{ address="mysql-8.default.svc.cluster.local" , port=3306 , hostgroup=1, max_connections=5000 },
-        { address="mysql-8-slave.default.svc.cluster.local" , port=3306 , hostgroup=1, max_connections=5000 },
+  {{- range $_, $server := .Values.mysql_servers }}
+  {
+    {{- if and $sslEnabled (not (hasKey $server "use_ssl")) -}}
+    {{- $server := merge $server (dict "use_ssl" 1) }}
+    {{- end }}
+    {{- range $key, $value := $server }}
+    {{ $key }}={{ $value | toJson }}
+    {{- end }}
+  },
+  {{- end }}
 )
-
 
 # defines all the MySQL users
 mysql_users:
 (
-	{ username = "root" , password = "XHCO2ydDXj" , default_hostgroup = 0 , active = 1 },
-        { username = "monitor" , password = "monitor" , default_hostgroup = 0 , active = 1 }
+  {{- range $_, $user := .Values.mysql_users }}
+  {
+    {{- if hasKey $user "active" -}}
+    {{- $server := merge $user (dict "active" 1) }}
+    {{- end }}
+    {{- range $key, $value := $user }}
+    {{ $key }}={{ $value | toJson }}
+    {{- end }}
+  },
+  {{- end }}
 )
-
-
 
 #defines MySQL Query Rules
 mysql_query_rules:
 (
-	{
-		rule_id=1
-		active=1
-		match_pattern="^SELECT .* FOR UPDATE$"
-		destination_hostgroup=0
-		apply=1
-	},
-	{
-		rule_id=2
-		active=1
-		match_pattern="^SELECT"
-		destination_hostgroup=1
-		apply=1
-	}
+  {{- range $idx, $rule := .Values.mysql_query_rules }}
+  {
+    rule_id={{ add $idx 1 }}
+    {{- range $key, $value := $rule }}
+    {{ $key }}={{ $value | toJson }}
+    {{- end }}
+  },
+  {{- end }}
 )
+
+proxysql_servers=
+(
+  {{- $nodeCount := .Values.proxysql_cluster.core.replicas | int}}
+  {{- range $index, $_ := until $nodeCount }}
+  {
+    hostname={{ printf "%s-%d" (include "proxysql.fullname" .) $index | toJson }}
+    port={{ $.Values.service.adminPort | toJson }}
+    weight=100
+  },
+  {{- end }}
+  {{- range $_, $pserver :=  .Values.additional_proxysql_servers }}
+  {
+    hostname={{ $pserver.hostname | toJson }}
+    port={{ default $.Values.service.adminPort $pserver.port | toJson }}
+    weight={{ default 100 $pserver.weight | toJson }}
+    comment={{ default "" $pserver.comment | toJson }}
+  },
+  {{- end }}
+)
+{{- end -}}
 
 scheduler=
 (
-	{
-		id=1
-		active=1
-		interval_ms=5000
-		filename="/bin/bash"
-		arg1="/tmp/hg-scheduler.bash"
-		arg2=""
-		arg3=""
-		arg4=""
-		arg5=""
-	}
+  {{- range $idx, $rule := .Values.schedulers }}
+  {
+    rule_id={{ add $idx 1 }}
+    {{- range $key, $value := $rule }}
+    {{ $key }}={{ $value | toJson }}
+    {{- end }}
+  },
+  {{- end }}
 )
-
 
 mysql_replication_hostgroups=
 (
-        {
-                writer_hostgroup=0
-                reader_hostgroup=1
-                comment="RHG1"
-       }
+  {{- range $idx, $rule := .Values.mysql_replication_hostgroups }}
+  {
+    rule_id={{ add $idx 1 }}
+    {{- range $key, $value := $rule }}
+    {{ $key }}={{ $value | toJson }}
+    {{- end }}
+  },
+  {{- end }}
 )
-
